@@ -1,5 +1,6 @@
 # LOAD STUFF
 library(data.table) # for import function fread
+library(ggplot2)
 
 setwd("/Users/SupremeLeader/Documents/Central European University/Applied Policy Project/Cross-sectional Data")
 ################################################
@@ -49,6 +50,20 @@ importData <- function(countries, year, vars){
                                      by.y = c("PB020", "DB030"))
 } # end function importData
 
+
+#----------------------------------------------#
+# CALCULATE INCOME BEFORE UNEMPLOYMENT BENEFITS
+
+rawIncome <- function(dat){
+  dat$rawIncome <- NA
+  for (household in unique(dat$DB030)){
+    dat$rawIncome[which(dat$DB030 == household)] <- (
+      dat$HX090[which(dat$DB030 == household)] - 
+        sum(dat$PY090G[which(dat$DB030 == household)])
+    )
+  }
+  return(dat)
+} # end function rawIncome
 
 #----------------------------------------------#
 ### EVALUATING QUANTILES (WEIGHTS)
@@ -107,7 +122,8 @@ pov1 <- function(country, year, thresholds = 60)
     thresholds <- thresholds/100
   } 
   
-  data <- importData(countries = country, year = year, vars = c("DB090", "HX090"))
+  data <- importData(countries = country, year = year, 
+                     vars = c("DB090", "HX090", "PY090G"))
   
   ## The median equivalized income -- persons
   medianPerson <- quanW(data[, "HX090"], data[, "DB090"])
@@ -125,17 +141,12 @@ pov1 <- function(country, year, thresholds = 60)
   ##  The poverty rates for the households 
   povRateHouse <- povRates(data, data[, "DB090"], thresholds, medianHouse)
   
-  rbind(person = povRatePerson, household = povRateHouse)
+  data.frame(country = country, threshold = thresholds * 100, personRate = povRatePerson, 
+             householdRate = povRateHouse)
 }  ##  end function pov1
 
 #----------------------------------------------#
-### PLOT SHITS
-
-##  Application
-par(mfrow=c(1,1), mar=c(4,4,1,1), mgp=0.75*c(3,1,0), lab=c(3,3,1))
-
-##  Diagram for Austria 2010 
-EUpov2(AT410b[[7]])
+### PLOT SHITS - UNUSED
 
 EUpov2 <- function(res, rws=c(1,2))
 {
@@ -174,7 +185,115 @@ EUpov2 <- function(res, rws=c(1,2))
   "DONE"
 }  ##  End of function EUpov2
 
-a <-pov1(test[which(test$DB020 == "HU"),], 60)
+
+##  Application
+par(mfrow=c(1,1), mar=c(4,4,1,1), mgp=0.75*c(3,1,0), lab=c(3,3,1))
 
 
-a <- pov1(country = c("HU"), year = 2012, thresholds = seq(30, 50, 1))
+HU10b <- pov1("HU", 2010, thresholds = seq(30, 80, 1))
+HU12b <- pov1("HU", 2012, thresholds = seq(30, 80,1))
+
+##  Initialisation for the annual results
+HU1012b <- list()
+
+##  Evaluation for a set of years 
+for (yr in seq(2010, 2012)){
+  HU1012b[[as.character(yr)]] <- pov1("HU", yr, thresholds=seq(30, 80, 0.5))
+}
+##  Diagram for Austria 2010 
+EUpov2(HU1012b[[1]])
+
+
+##  Smoothing functions  SMOO,  KernSq
+SMOO <- function(vec, sm=0.25)
+{
+  ###  Function to smooth vector  vec  with coefficient of smoothing  sm
+  
+  ##  From percentage to fraction
+  while (sm > 1) sm <- sm/100
+  
+  ##  The length of the vector
+  nve <- length(vec)
+  
+  ##  The smoothing
+  c(vec[1], vec[-seq(2)]*sm+vec[-c(1,nve)]*(1-2*sm)+vec[-(nve-c(0,1))]*sm, vec[nve])
+}  ##  End of function  SMOO
+
+
+KernSq <- function(ysq, sde)
+{
+  ###  Kernel smoothing for a sequence  (see Section 7.4.1)
+  
+  ##  ysq    The sequence
+  ##  sde    The standard deviation of the normal kernel
+  
+  ##  The length of the sequence 
+  n <- length(ysq)
+  
+  ##  The weights
+  smw <- dnorm(seq(n)-1, 0, sde)
+  
+  ##  Initialisation for the smoothed values
+  ysm <- c()
+  
+  for (k in seq(n))
+  {
+    wei <- smw[1+abs(k - seq(n))]
+    ysm <- c(ysm, sum(ysq * wei) / sum(wei))
+  }
+}  ##  End of function  KernSq
+
+## UNUSED 
+
+#----------------------------------------------#
+# TEST STUFF
+
+hu1 <- pov1("HU", 2014, seq(30, 80, 1))
+lv1 <- pov1("LV", 2014, seq(30, 80, 1))
+cz1 <- pov1("CZ", 2014, seq(30, 80, 1))
+b <- rbind(hu1, lv1, cz1)
+plot2 <- ggplot(data = b, aes(threshold, personRate, 
+                          colour = country)) + 
+       geom_line() + geom_vline(xintercept = 60) + theme_classic() +
+       ggtitle("Poverty Rates for Different Thresholds, Person 2014")
+
+hu <- pov1("HU", 2012, seq(30, 80, 1))
+lv <- pov1("LV", 2012, seq(30, 80, 1))
+cz <- pov1("CZ", 2012, seq(30, 80, 1))
+a <- rbind(hu, lv, cz)
+
+
+
+
+plot1 <- ggplot(data = a, aes(threshold, personRate, 
+                          colour = country)) + 
+       geom_line() + geom_vline(xintercept = 60) + theme_classic() +
+       ggtitle("Poverty Rates for Different Thresholds, Person 2012")
+
+plot3 <- ggplot(data = a, aes(threshold, householdRate, 
+                                   colour = country)) + 
+                geom_line() + geom_vline(xintercept = 60) + theme_classic() +
+                ggtitle("Poverty Rates for Different Thresholds, Household 2012")
+
+plot4 <- ggplot(data = b, aes(threshold, householdRate, 
+                                   colour = country)) + 
+                geom_line() + geom_vline(xintercept = 60) + theme_classic() +
+                ggtitle("Poverty Rates for Different Thresholds, Household 2014")
+
+
+library(gridExtra)
+myPlotList = list(plot1, plot2, plot3, plot4)
+do.call(grid.arrange,  myPlotList)
+grid.arrange(plot1, plot2, plot3, plot4)
+
+a$year <- "2012"
+b$year <- "2014"
+c <- rbind(a[which(a$country == "CZ"),], b[which(a$country == "CZ"),])
+plot(ggplot(data =c, aes(threshold, personRate, colour = year)) +
+       geom_line())
+
+
+
+
+
+

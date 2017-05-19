@@ -65,6 +65,7 @@ rawIncome <- function(dat){
   return(dat)
 } # end function rawIncome
 
+
 #----------------------------------------------#
 ### EVALUATING QUANTILES (WEIGHTS)
 # Quantiles with weights (used for median as the default)
@@ -93,15 +94,17 @@ quanW <- function(values, weights, p = 0.5){
 #----------------------------------------------#
 ### CALCULATE POVERTY RATES
 # To be used in conjunction with pov1
+# Added incomeVar as input to distinguish total income and total income before
+# benefits. Takes either "HX090" or "rawIncome"
 
-povRates <- function(data, weights, thresholds, median){
+povRates <- function(data, incomeVar, weights, thresholds, median){
   ### Poverty rates for a range of thresholds -- function used in pov
   # Initialize rates
   rates <- c()
   
   # Rate for each threshold
   for (threshold in thresholds){
-    rates <- c(rates, sum(weights * (data[, "HX090"] < threshold * median)) )
+    rates <- c(rates, sum(weights * (data[, incomeVar] < threshold * median)) )
   }
   
   names(rates) <- 100 * thresholds
@@ -122,132 +125,49 @@ pov1 <- function(country, year, thresholds = 60)
     thresholds <- thresholds/100
   } 
   
+  ## Import data
   data <- importData(countries = country, year = year, 
                      vars = c("DB090", "HX090", "PY090G"))
+  
+  ## Calculate income before unemployment benefits
+  data <- rawIncome(data)
   
   ## The median equivalized income -- persons
   medianPerson <- quanW(data[, "HX090"], data[, "DB090"])
   
   ## Poverty rates for persons
-  povRatePerson <- povRates(data, data[, "DB090"], thresholds, medianPerson)
+  povRatePerson <- povRates(data, "HX090", data[, "DB090"], 
+                            thresholds, medianPerson)
+  
+  ## Poverty rates for persons -- raw income
+  povRatePersonRaw <- povRates(data, "rawIncome", data[, "DB090"], 
+                               thresholds, medianPerson)
   
   ## Reduce data to household level
   data <- data[!duplicated(data[, "DB030"]),]
   
-  ##  The median equivalized income  --  households 
-  
+  ## The median equivalized income  --  households 
   medianHouse <- quanW(data[, "HX090"], data[, "DB090"])
   
-  ##  The poverty rates for the households 
-  povRateHouse <- povRates(data, data[, "DB090"], thresholds, medianHouse)
+  ## The poverty rates for households 
+  povRateHouse <- povRates(data, "HX090", data[, "DB090"], 
+                           thresholds, medianHouse)
   
-  data.frame(country = country, threshold = thresholds * 100, personRate = povRatePerson, 
-             householdRate = povRateHouse)
+  ## Poverty rates for households -- raw income
+  povRateHouseRaw <- povRates(data, "rawIncome", data[, "DB090"], 
+                              thresholds, medianHouse)
+  
+  data.frame(country = country, year = year, threshold = thresholds * 100, 
+             personRate = povRatePerson, householdRate = povRateHouse, 
+             personRateNoBen = povRatePersonRaw,
+             householdRateNoBen = povRateHouseRaw)
 }  ##  end function pov1
 
-#----------------------------------------------#
-### PLOT SHITS - UNUSED
 
-EUpov2 <- function(res, rws=c(1,2))
-{
-  ###   Individual- and household-level poverty rates  
-  ##  res    The result object (matrix)
-  ##  rws    The rows to plot
-  
-  ##  The valuation points 
-  pts <- as.numeric(colnames(res))
-  npt <- length(pts)
-  
-  ##  Empty shell of the plot
-  plot(range(pts), range(res), type="n", 
-       xlab="Poverty threshold (%)", ylab="Poverty rate (%)", 
-       cex.lab=0.9, cex.axis=0.9)
-  
-  ##  No smoothing 
-  for (rw in rws)
-    lines(pts, res[rw, ], lty=rw, lwd=0.1)
-  
-  ##  Neighbourhood smoothing 
-  for (rw in rws)
-    lines(pts, SMOO(res[rw, ], 0.25), lty=rw, lwd=0.4)
-  
-  ##  Normal kernel smoothing  -- preferred
-  for (rw in rws)
-    lines(pts, KernSq(res[rw, ], npt/60), lty=rw, lwd=1.1, col="gray50")
-  
-  ##  The conventional threshold
-  abline(v=60, lty=3, lwd=0.9)
-  
-  ##  Legend at the bottom-right hand corner
-  legend(sum(range(pts)*c(0.07, 0.93)), sum(range(res)*c(0.87,0.13)), 
-         lty=rws, substring(rownames(res)[rws], 1, 1), cex=0.7)
-  
-  "DONE"
-}  ##  End of function EUpov2
-
-
-##  Application
-par(mfrow=c(1,1), mar=c(4,4,1,1), mgp=0.75*c(3,1,0), lab=c(3,3,1))
-
-
-HU10b <- pov1("HU", 2010, thresholds = seq(30, 80, 1))
-HU12b <- pov1("HU", 2012, thresholds = seq(30, 80,1))
-
-##  Initialisation for the annual results
-HU1012b <- list()
-
-##  Evaluation for a set of years 
-for (yr in seq(2010, 2012)){
-  HU1012b[[as.character(yr)]] <- pov1("HU", yr, thresholds=seq(30, 80, 0.5))
-}
-##  Diagram for Austria 2010 
-EUpov2(HU1012b[[1]])
-
-
-##  Smoothing functions  SMOO,  KernSq
-SMOO <- function(vec, sm=0.25)
-{
-  ###  Function to smooth vector  vec  with coefficient of smoothing  sm
-  
-  ##  From percentage to fraction
-  while (sm > 1) sm <- sm/100
-  
-  ##  The length of the vector
-  nve <- length(vec)
-  
-  ##  The smoothing
-  c(vec[1], vec[-seq(2)]*sm+vec[-c(1,nve)]*(1-2*sm)+vec[-(nve-c(0,1))]*sm, vec[nve])
-}  ##  End of function  SMOO
-
-
-KernSq <- function(ysq, sde)
-{
-  ###  Kernel smoothing for a sequence  (see Section 7.4.1)
-  
-  ##  ysq    The sequence
-  ##  sde    The standard deviation of the normal kernel
-  
-  ##  The length of the sequence 
-  n <- length(ysq)
-  
-  ##  The weights
-  smw <- dnorm(seq(n)-1, 0, sde)
-  
-  ##  Initialisation for the smoothed values
-  ysm <- c()
-  
-  for (k in seq(n))
-  {
-    wei <- smw[1+abs(k - seq(n))]
-    ysm <- c(ysm, sum(ysq * wei) / sum(wei))
-  }
-}  ##  End of function  KernSq
-
-## UNUSED 
 
 #----------------------------------------------#
 # TEST STUFF
-
+# Pov rate plot for countries 
 hu1 <- pov1("HU", 2014, seq(30, 80, 1))
 lv1 <- pov1("LV", 2014, seq(30, 80, 1))
 cz1 <- pov1("CZ", 2014, seq(30, 80, 1))
@@ -280,12 +200,13 @@ plot4 <- ggplot(data = b, aes(threshold, householdRate,
                 geom_line() + geom_vline(xintercept = 60) + theme_classic() +
                 ggtitle("Poverty Rates for Different Thresholds, Household 2014")
 
-
+# Put in grid 
 library(gridExtra)
 myPlotList = list(plot1, plot2, plot3, plot4)
 do.call(grid.arrange,  myPlotList)
 grid.arrange(plot1, plot2, plot3, plot4)
 
+# tested some shit here I don't know what
 a$year <- "2012"
 b$year <- "2014"
 c <- rbind(a[which(a$country == "CZ"),], b[which(a$country == "CZ"),])
@@ -294,6 +215,156 @@ plot(ggplot(data =c, aes(threshold, personRate, colour = year)) +
 
 
 
+beta <- melt(hu1[, -c(1)], measure.vars = c("personRate", "personRateNoBen", "householdRate", "householdRateNoBen"))
+head(beta)
+plot(ggplot(data = beta, aes(threshold, value, colour = variable)) +
+       geom_line() + theme_classic())
+beta
+hu1
+write.csv(hu1, "hu.csv")
+
+
+
+#-----------------------------------------------------------------------------------
+# Generate massive dataset for pov rates for all countries all years
+listCountry <- c("HU", "LV", "CZ", "SK")
+listYear <- c(2005:2014)
+
+endMyLifeFam <- data.frame(country = character(), year = integer(), 
+                          threshold = integer(), 
+                          personRate = double(), householdRate = double(),
+                          personRateNoBen = double(), householdRateNoBen = double())
+for (country in listCountry){
+  for (year in listYear){
+    endMyLifeFam <- rbind(endMyLifeFam, pov1(country, year, seq(30, 80, 1)))
+  }
+}
+
+endMyLifeFam[which(endMyLifeFam$country == "HU" & endMyLifeFam$year == 2005),]
+write.csv(endMyLifeFam, "povRates.csv")
+
+# Data for pov rate in comparison to HUNGARY
+fuckMe <- data.frame(country = character(), year = integer(), 
+                     threshold = integer(), 
+                     personRate = double(), householdRate = double(),
+                     personRateNoBen = double(), householdRateNoBen = double())
+
+fuckMe <- endMyLifeFam[which(endMyLifeFam$country == "HU"),]
+fuckMe <- rbind(fuckMe, fuckMe, fuckMe, fuckMe)
+
+diff <- endMyLifeFam[, 4:7] - fuckMe[, 4:7]
+diff <- cbind(endMyLifeFam[, 1:3], diff)
+write.csv(diff, "diffPovRates.csv")
+
+json <- toJSON(diff)
+write(json, "deathEmbrace.json")
+
+#------------------------------------------------------------------------------------
+
+
+
+
+# graph for difference between pov rate before and after benefits 
+
+
+omega <- melt(lv1[, -c(1)], measure.vars = c("personRate", "personRateNoBen", "householdRate", "householdRateNoBen"))
+head(beta)
+plot(ggplot(data = omega, aes(threshold, value, colour = variable)) +
+       geom_line() + theme_classic())
+
+lv1_1 <- lv1[, c("country" ,"threshold", "householdRate", "householdRateNoBen")]
+lv1_1$difference <- abs(lv1_1$householdRate - lv1_1$householdRateNoBen)
+lv1_1 <- melt(lv1_1, measure.vars = c("householdRate", "householdRateNoBen"))
+plot(ggplot(data = lv1_1, aes(threshold, difference)) +
+       geom_line() + theme_classic())
+
+
+hu1_1 <- hu1[, c("country" ,"threshold", "householdRate", "householdRateNoBen")]
+hu1_1$difference <- abs(hu1_1$householdRate - hu1_1$householdRateNoBen)
+hu1_1 <- melt(hu1_1, measure.vars = c("householdRate", "householdRateNoBen"))
+plot(ggplot(data = hu1_1, aes(threshold, difference)) +
+       geom_line() + theme_classic())
+
+
+cz1_1 <- cz1[, c("country" , "threshold", "householdRate", "householdRateNoBen")]
+cz1_1$difference <- abs(cz1_1$householdRate - cz1_1$householdRateNoBen)
+cz1_1 <- melt(cz1_1, measure.vars = c("householdRate", "householdRateNoBen"))
+plot(ggplot(data = cz1_1, aes(threshold, difference)) +
+       geom_line() + theme_classic())
+
+#################################################################################
+# Prepare data for D3
+# eternalVoid = data, totalDespair = difference to Hungary
+HU <- data.frame(country = character(), year = integer(), 
+                 threshold = integer(), 
+                 personRate = double(), householdRate = double(),
+                 personRateNoBen = double(), householdRateNoBen = double())
+for (year in listYear){
+  HU <- rbind(HU, pov1("HU", year, seq(30, 80, 1)))
+}
+names(HU) <- c("country", "year", "threshold", "personHU", "householdHU",
+               "personNoBenHU", "householdNoBenHU")
+  
+LV <- data.frame(country = character(), year = integer(), 
+                 threshold = integer(), 
+                 personRate = double(), householdRate = double(),
+                 personRateNoBen = double(), householdRateNoBen = double())
+
+for (year in listYear){
+  LV <- rbind(LV, pov1("LV", year, seq(30, 80, 1)))
+}  
+names(LV) <- c("country", "year", "threshold", "personLV", "householdLV",
+               "personNoBenLV", "householdNoBenLV")
+
+CZ <- data.frame(country = character(), year = integer(), 
+                 threshold = integer(), 
+                 personRate = double(), householdRate = double(),
+                 personRateNoBen = double(), householdRateNoBen = double())
+for (year in listYear){
+  CZ <- rbind(CZ, pov1("CZ", year, seq(30, 80, 1)))
+}
+names(CZ) <- c("country", "year", "threshold", "personCZ", "householdCZ",
+               "personNoBenCZ", "householdNoBenCZ")
+
+SK <- data.frame(country = character(), year = integer(), 
+                 threshold = integer(), 
+                 personRate = double(), householdRate = double(),
+                 personRateNoBen = double(), householdRateNoBen = double())
+for (year in listYear){
+  SK <- rbind(SK, pov1("SK", year, seq(30, 80, 1)))
+}
+names(SK) <- c("country", "year", "threshold", "personSK", "householdSK",
+               "personNoBenSK", "householdNoBenSK")
+
+
+eternalVoid <- cbind(HU[, -c(1)], LV[, -c(1,2,3)], CZ[, -c(1,2,3)], SK[, -c(1,2,3)])
+totalDespair <- eternalVoid
+totalDespair$personLV <- totalDespair$personLV - totalDespair$personHU
+totalDespair$personCZ <- totalDespair$personCZ - totalDespair$personHU
+totalDespair$personSK <- totalDespair$personSK - totalDespair$personHU
+totalDespair$householdLV <- totalDespair$householdLV - totalDespair$householdHU
+totalDespair$householdCZ <- totalDespair$householdCZ - totalDespair$householdHU
+totalDespair$householdSK <- totalDespair$householdSK - totalDespair$householdHU
+totalDespair$personNoBenLV <- totalDespair$personNoBenLV - totalDespair$personNoBenHU
+totalDespair$personNoBenCZ <- totalDespair$personNoBenCZ - totalDespair$personNoBenHU
+totalDespair$personNoBenSK <- totalDespair$personNoBenSK - totalDespair$personNoBenHU
+totalDespair$householdNoBenLV <- totalDespair$householdNoBenLV - totalDespair$householdNoBenHU
+totalDespair$householdNoBenCZ <- totalDespair$householdNoBenCZ - totalDespair$householdNoBenHU
+totalDespair$householdNoBenSK <- totalDespair$householdNoBenSK - totalDespair$householdNoBenHU
+totalDespair$personHU <- 0
+totalDespair$householdHU <- 0
+totalDespair$personNoBenHU <- 0
+totalDespair$householdNoBenHU <- 0
+
+write.csv(totalDespair, "d3data.csv")
+
+############################################################################
+# Plot some shit. Difference in poverty compare to HUNGARY
+
+plot(ggplot(diff[which(diff$year == 2014),],
+            aes(threshold, personRate, colour = country)) + geom_line() +
+       theme_classic() + scale_y_continuous(limits = c(-15, 15)) +
+       geom_vline(xintercept = 60))
 
 
 

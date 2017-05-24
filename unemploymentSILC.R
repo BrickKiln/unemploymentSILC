@@ -1,6 +1,8 @@
 # LOAD STUFF
 library(data.table) # for import function fread
 library(ggplot2)
+library(directlabels)
+library(gridExtra) # for combinePlot function
 
 setwd("/Users/SupremeLeader/Documents/Central European University/Applied Policy Project/Cross-sectional Data")
 ################################################
@@ -10,7 +12,9 @@ setwd("/Users/SupremeLeader/Documents/Central European University/Applied Policy
 #########################
 
 #----------------------------------------------#
-### IMPORT DATA
+#################
+## IMPORT DATA ##
+#################
 # Make sure to flatten directory with all files in the format "UDB_c[year][type].csv"
 # Have not included conditions, works best when used with at least one variable
 # from each of D, H, and P file.
@@ -52,14 +56,17 @@ importData <- function(countries, year, vars){
 
 
 #----------------------------------------------#
-# CALCULATE INCOME BEFORE UNEMPLOYMENT BENEFITS
+#########################################
+## INCOME BEFORE UNEMPLOYMENT BENEFITS ##
+#########################################
 
 rawIncome <- function(dat){
   dat$rawIncome <- NA
   for (household in unique(dat$DB030)){
     dat$rawIncome[which(dat$DB030 == household)] <- (
-      dat$HX090[which(dat$DB030 == household)] - 
-        sum(dat$PY090G[which(dat$DB030 == household)])
+      (dat$HY020[which(dat$DB030 == household)] - 
+        sum(dat$PY090G[which(dat$DB030 == household)]))/
+        dat$HX050[which(dat$DB030 == household)]
     )
   }
   return(dat)
@@ -67,7 +74,10 @@ rawIncome <- function(dat){
 
 
 #----------------------------------------------#
-### EVALUATING QUANTILES (WEIGHTS)
+####################################
+## EVALUATING QUANTILES (WEIGHTS) ##
+####################################
+
 # Quantiles with weights (used for median as the default)
 # To be used in conjunction with pov1
 
@@ -92,7 +102,9 @@ quanW <- function(values, weights, p = 0.5){
 
 
 #----------------------------------------------#
-### CALCULATE POVERTY RATES
+#############################
+## CALCULATE POVERTY RATES ##
+#############################
 # To be used in conjunction with pov1
 # Added incomeVar as input to distinguish total income and total income before
 # benefits. Takes either "HX090" or "rawIncome"
@@ -127,7 +139,7 @@ pov1 <- function(country, year, thresholds = 60)
   
   ## Import data
   data <- importData(countries = country, year = year, 
-                     vars = c("DB090", "HX090", "PY090G"))
+                     vars = c("DB090", "HX090", "PY090G", "HX050", "HY020"))
   
   ## Calculate income before unemployment benefits
   data <- rawIncome(data)
@@ -240,8 +252,7 @@ for (country in listCountry){
   }
 }
 
-endMyLifeFam[which(endMyLifeFam$country == "HU" & endMyLifeFam$year == 2005),]
-write.csv(endMyLifeFam, "povRates.csv")
+write.csv(endMyLifeFam, "massiveData.csv")
 
 # Data for pov rate in comparison to HUNGARY
 fuckMe <- data.frame(country = character(), year = integer(), 
@@ -338,6 +349,8 @@ names(SK) <- c("country", "year", "threshold", "personSK", "householdSK",
 
 
 eternalVoid <- cbind(HU[, -c(1)], LV[, -c(1,2,3)], CZ[, -c(1,2,3)], SK[, -c(1,2,3)])
+write.csv(eternalVoid, "eternalVoid.csv")
+
 totalDespair <- eternalVoid
 totalDespair$personLV <- totalDespair$personLV - totalDespair$personHU
 totalDespair$personCZ <- totalDespair$personCZ - totalDespair$personHU
@@ -367,4 +380,114 @@ plot(ggplot(diff[which(diff$year == 2014),],
        geom_vline(xintercept = 60))
 
 
+#----------------------------------------------------------
 
+####################
+## PLOT FUNCTIONS ##
+####################
+# Load data
+massiveData <- read.csv("massiveData.csv")
+diff <- read.csv("diffPovRates.csv")
+
+# Color-blind- friendly pallette
+# add this to ggplot: scale_colour_manual(values=cbPalette)
+cbPalette <- c("#999999", "#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2", "#D55E00", "#CC79A7")
+
+# Plot compare rates among countries
+plotCompare <- function(year, rate, title){
+  ggplot(data = massiveData[which(massiveData$year == year),], 
+         aes_string("threshold", rate, colour = "country")) + geom_line() +
+    geom_vline(xintercept = 60, linetype = "dotted") + theme_classic() +
+    ggtitle(title) + theme(legend.position = "none") + scale_colour_manual(values=cbPalette) +
+    scale_y_continuous(limits = c(0, 42)) +
+    theme(plot.title = element_text(family = "Trebuchet MS", size = 22, 
+                                    color="#666666", face="bold")) +
+    geom_dl(aes(label = country), method = list(dl.combine("first.points", "last.points"), 
+                                                cex = 0.8))
+
+} # end of function plotCompare
+
+# Plot rates of countries using HU as base 
+plotDiff <- function(year, rate, title){
+  ggplot(data = diff[which(diff$year == year),], 
+         aes_string("threshold", rate, colour = "country")) + geom_line() +
+    geom_vline(xintercept = 60, linetype = "dotted") + theme_classic() +
+    ggtitle(title) + theme(legend.position = "none", 
+                           plot.title = element_text(family = "Trebuchet MS", size = 22,
+                                                     color="#666666", face="bold")) + 
+    scale_colour_manual(values=cbPalette) +
+    scale_y_continuous(limits = c(-8, 18)) +
+    geom_dl(aes(label = country), method = list(dl.combine("first.points", "last.points"), 
+                                                cex = 0.8))
+} # end of function plotDiff
+
+# Plot difference of curves within a country
+plotCountry <- function(country, year, title){
+  temp <- melt(massiveData[which(massiveData$year == year & massiveData$country == country), c(-1)],
+               measure.vars = c("personRate", "personRateNoBen", "householdRate",
+                                "householdRateNoBen"))
+  ggplot(data = temp, aes(threshold, value, colour = variable)) + geom_line() + 
+    geom_vline(xintercept = 60, linetype = "dotted") + theme_classic() +
+    ggtitle(title) + theme(legend.position = c(0.2, 0.8), legend.title = element_blank(),
+                           plot.title = element_text(family = "Trebuchet MS", size = 22,
+                                                     color="#666666", face="bold")) +
+    scale_colour_manual(values=cbPalette) + scale_y_continuous(name = "rate", limits = c(0, 42))
+} # end of function plotCountry
+
+# Combine Plots
+combinePlot <- function(plot1, plot2){
+  temp = list(plot1, plot2)
+  do.call(grid.arrange, temp)
+  grid.arrange(plot1, plot2, ncol = 2, nrow = 1)
+} # end of function combinePlot
+
+##################
+# Plot poverty rates in relation in Hungary 2010 and 2014
+combinePlot(test, test1)
+test <- plotDiff(2010, "householdRate", "2010")
+test1 <- plotDiff(2014, "householdRate", "2014")
+
+# Plot country rates for Hungary
+hu06 <- plotCountry("HU", 2006, "HU 2006")
+hu10 <- plotCountry("HU", 2010, "HU 2010")
+hu13 <- plotCountry("HU", 2013, "HU 2013")
+hu14 <- plotCountry("HU", 2014, "HU 2014")
+combinePlot(hu10, hu13)
+# for Latvia 2010 and 2014
+lv10 <- plotCountry("LV", 2011, "LV 2011")
+lv14 <- plotCountry("LV", 2014, "LV 2014")
+combinePlot(lv10, lv14)
+
+lv10all <- importData(countries = "LV", year = 2010, 
+                      vars = c("DB090", "HX090", "PY090G", "HX050", "HY020"))
+lv14all <- importData(countries = "LV", year = 2014, 
+                      vars = c("DB090", "HX090", "PY090G", "HX050", "HY020"))
+lv07all <- importData(countries = "LV", year = 2008, 
+                      vars = c("DB090", "HX090", "PY090G", "HX050", "HY020"))
+summary(lv10all$PY090G)
+summary(lv14all$PY090G)
+summary(lv07all$py090G)
+
+
+test <- importData("HU", 2015, vars = c("DB090", "HX090", "PY090G", "HX050", "HY020"))
+summary(test$HX090)
+
+
+
+setwd("/Users/SupremeLeader/Documents/Central European University/Applied Policy Project/Cross-sectional Data")
+euromod <- read.table("HU_2012_a5.txt")
+hudata12 <- importData("HU", 2012, vars = c("DB090", "HX090", "PY090G", "HX050", "HY020"))
+(setdiff(sort(unique(euromod$idhh)), sort(unique(hudata12$DB030))))
+(setdiff(sort(unique(hudata12$DB030)), sort(unique(euromod$idhh))))
+
+endMyLifeFam <- endMyLifeFam[-which(endMyLifeFam$year == 2006),]
+endMyLifeFam <- read.csv("endMyLifeFam.csv")
+endMyLifeFam <- endMyLifeFam[, -c(1)]
+abc <- melt(endMyLifeFam, id.vars = c("country", "year", "threshold"))
+abc$variable <- paste(abc$variable, abc$country, sep = "")
+write.csv(abc, "final.csv")
+
+setwd("/Users/SupremeLeader/Documents/Coding Stuff/test")
+endMyLifeFam <- read.csv("endMyLifeFam.csv")
+endMyLifeFam <- endMyLifeFam[, -c(1)]
+write.csv(endMyLifeFam, "endMyLIfeFam.csv", row.names = FALSE)

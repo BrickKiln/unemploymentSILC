@@ -265,7 +265,7 @@ fuckMe <- rbind(fuckMe, fuckMe, fuckMe, fuckMe)
 
 diff <- endMyLifeFam[, 4:7] - fuckMe[, 4:7]
 diff <- cbind(endMyLifeFam[, 1:3], diff)
-write.csv(diff, "diffPovRates.csv")
+write.csv(diff, "diffPovRates.csv", row.names = FALSE)
 
 json <- toJSON(diff)
 write(json, "deathEmbrace.json")
@@ -416,7 +416,7 @@ plotDiff <- function(year, rate, title){
                            plot.title = element_text(family = "Trebuchet MS", size = 22,
                                                      color="#666666", face="bold")) + 
     scale_colour_manual(values=cbPalette) +
-    scale_y_continuous(limits = c(-8, 18)) +
+    scale_y_continuous(name = "poverty rate (%)", limits = c(-8, 18)) +
     geom_dl(aes(label = country), method = list(dl.combine("first.points", "last.points"), 
                                                 cex = 0.8))
 } # end of function plotDiff
@@ -431,7 +431,7 @@ plotCountry <- function(country, year, title){
     ggtitle(title) + theme(legend.position = c(0.2, 0.8), legend.title = element_blank(),
                            plot.title = element_text(family = "Trebuchet MS", size = 22,
                                                      color="#666666", face="bold")) +
-    scale_colour_manual(values=cbPalette) + scale_y_continuous(name = "rate", limits = c(0, 42))
+    scale_colour_manual(values=cbPalette) + scale_y_continuous(name = "poverty rate (%)", limits = c(0, 42))
 } # end of function plotCountry
 
 # Combine Plots
@@ -443,16 +443,20 @@ combinePlot <- function(plot1, plot2){
 
 ##################
 # Plot poverty rates in relation in Hungary 2010 and 2014
-combinePlot(test, test1)
-test <- plotDiff(2010, "householdRate", "2010")
+test <- plotDiff(2011, "householdRate", "2011")
 test1 <- plotDiff(2014, "householdRate", "2014")
+combinePlot(test, test1)
+# Plot poverty rates in relation to Hungary in 2010 and 2014, no ben
+random <- plotDiff(2011, "householdRateNoBen", "2011")
+random1 <- plotDiff(2014, "householdRateNoBen", "2014")
+combinePlot(random, random1)
 
 # Plot country rates for Hungary
 hu06 <- plotCountry("HU", 2006, "HU 2006")
-hu10 <- plotCountry("HU", 2010, "HU 2010")
+hu11 <- plotCountry("HU", 2011, "HU 2011")
 hu13 <- plotCountry("HU", 2013, "HU 2013")
 hu14 <- plotCountry("HU", 2014, "HU 2014")
-combinePlot(hu10, hu13)
+combinePlot(hu11, hu14)
 # for Latvia 2010 and 2014
 lv10 <- plotCountry("LV", 2011, "LV 2011")
 lv14 <- plotCountry("LV", 2014, "LV 2014")
@@ -491,3 +495,117 @@ setwd("/Users/SupremeLeader/Documents/Coding Stuff/test")
 endMyLifeFam <- read.csv("endMyLifeFam.csv")
 endMyLifeFam <- endMyLifeFam[, -c(1)]
 write.csv(endMyLifeFam, "endMyLIfeFam.csv", row.names = FALSE)
+
+
+
+
+
+
+
+###################
+# Graph for Armine's data
+graphStuff <- read.csv("Data-for-graphs.csv")
+graphStuff$Country <- gsub("Hungary", "HU", graphStuff$Country)
+graphStuff$Country <- gsub("Czech Reuplic", "CZ", graphStuff$Country)
+graphStuff$Country <- gsub("Latvia", "LV", graphStuff$Country)
+graphStuff$Country <- gsub("Slovakia", "SK", graphStuff$Country)
+graphStuff$Train_Perc_GDP <- as.numeric(graphStuff$Train_Perc_GDP)
+graphStuff$PW_Perc_GDP <- as.numeric(graphStuff$PW_Perc_GDP)
+
+graph1 <- graphStuff[-which(graphStuff$Country == "EU"), c(1:4)]
+graph1 <- graph1[-c(17:19),]
+graph1$Train_Perc_GDP
+
+plot1<- ggplot(data = graph1, 
+               aes(Year, Train_Perc_GDP, colour = Country)) + geom_line() +
+  theme_classic() +
+  ggtitle("Public Expenditure on Training") + theme(legend.position = "none") + scale_colour_manual(values=cbPalette) +
+  theme(plot.title = element_text(family = "Trebuchet MS", size = 22, 
+                                  color="#666666", face="bold")) +
+  labs(y = "Expenditure (% of GDP)") +
+  geom_dl(aes(label = Country), method = list(dl.combine("first.points", "last.points"), 
+                                              cex = 0.8))
+
+plot2<- ggplot(data = graph1, 
+               aes(Year, PW_Perc_GDP, colour = Country)) + geom_line() +
+  theme_classic() +
+  ggtitle("Public Expenditure on \n Direct Job Creation") + theme(legend.position = "none") + scale_colour_manual(values=cbPalette) +
+  theme(plot.title = element_text(family = "Trebuchet MS", size = 22, 
+                                  color="#666666", face="bold")) +
+  labs(y = "Expenditure (% of GDP)") +
+  geom_dl(aes(label = Country), method = list(dl.combine("first.points", "last.points"), 
+                                              cex = 0.8))
+combinePlot(plot2, plot1)
+
+graph2 <- graphStuff[which(graphStuff$Country == "HU"), c(2, 5, 6)]
+graph2 <- graph2[-(1:4),]
+graph2 <- melt(graph2, id.vars = c("Year"))
+graph2$variable <- gsub("Unemployment", "Unemployment Rate", graph2$variable)
+graph2$variable <- gsub("Unemp_and_PW", "Unemployment Rate Including Public Work", graph2$variable)
+
+plot(ggplot(data = graph2, 
+            aes(Year, value, colour = variable)) + geom_line() +
+       theme_classic() + theme(legend.position = "none") + scale_colour_manual(values=cbPalette) +
+       theme(plot.title = element_text(family = "Trebuchet MS", size = 22, 
+                                       color="#666666", face="bold"),
+             legend.position = c(0.2, 0.2), legend.title = element_blank(),
+             legend.background = element_rect(fill="gray90", size=.5, linetype="dotted"),
+             legend.text = element_text(size = 13)) +
+       labs(y = "Rate (%)"))
+
+graph3 <- graphStuff[which(graphStuff$Country == "HU" | graphStuff$Country == "EU"), c(1,2, 7:11)]
+graph3 <- graph3[-which(graph3$Year == 2016),]
+
+graph3 <- read.csv("graph3.csv")
+graph3$Year <- as.factor(graph3$Year)
+names(graph3) <- c("Country", "Year", "Training", "Employment Incentives", "Supported Employment & Rehabilitation", 
+                   "Direct Job Creation", "Start-up Incentive")
+graph3HU <- graph3[which(graph3$Country == "Hungary"), c(2:7)]
+graph3HU <- melt(graph3HU, id.vars = c("Year"))
+graph3EU <- graph3[which(graph3$Country == "EU"), c(2:7)]
+graph3EU <- melt(graph3EU, id.vars = c("Year"))
+
+
+plot3<- ggplot(data = graph3HU, 
+               aes(Year, value, fill = variable)) + geom_bar(stat = 'identity') + ggtitle("  HU") +
+  theme_classic() + theme(legend.position = "none") + scale_fill_manual(values=cbPalette) +
+  theme(plot.title = element_text(family = "Trebuchet MS", size = 22, 
+                                  color="#666666", face="bold"),
+        legend.position = c(0.35, 0.85), legend.title = element_blank(),
+        legend.text = element_text(size = 10)) + 
+  labs(y = "Million Euro")
+
+plot4 <- ggplot(data = graph3EU, 
+                aes(Year, value, fill = variable)) + geom_bar(stat = 'identity') + ggtitle("  EU") +
+  theme_classic() + theme(legend.position = "none") + scale_fill_manual(values=cbPalette) +
+  theme(plot.title = element_text(family = "Trebuchet MS", size = 22, 
+                                  color="#666666", face="bold"),
+        legend.position = "none", legend.title = element_blank(),
+        legend.background = element_rect(fill="gray90", size=.5, linetype="dotted"),
+        legend.text = element_text(size = 13)) + 
+  labs(y = "Million Euro")
+combinePlot(plot3, plot4)
+
+
+##############################
+# Fix according to Alexis
+# Plot difference between ben and no ben for 2 years on same graph
+massiveData$diffPerson <- massiveData$personRateNoBen - massiveData$personRate
+massiveData$diffHouse <-massiveData$householdRateNoBen - massiveData$householdRate
+totona <- massiveData[which(massiveData$country == "HU"), c(2, 3, 4, 10)]
+totona <- totona[which(totona$year == 2014 | totona$year == 2011), -c(1)]
+totona$year <- as.factor(totona$year)
+totona = melt(totona, id.vars = c("threshold", "year"))
+
+plot(ggplot(data = totona, 
+       aes(threshold, diffHouse, colour = year)) + geom_line() +
+  theme_classic() + geom_vline(xintercept = 60, linetype = "dotted") +
+  ggtitle("Hungary, 2011 & 2014") + theme(legend.position = "none") + scale_colour_manual(values=cbPalette) +
+  theme(plot.title = element_text(family = "Trebuchet MS", size = 22, 
+                                  color="#666666", face="bold")) +
+  labs(y = "change (% point)") +
+  geom_dl(aes(label = year), method = list(dl.combine("first.points", "last.points"), 
+                                              cex = 0.8)))
+
+plot(plotCountry("HU", 2011, "Hungary, 2011"))
+

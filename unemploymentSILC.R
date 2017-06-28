@@ -204,7 +204,7 @@ for (country in listCountry){
 }
 
 # Save to csv
-write.csv(povRatesOut, "povRatesOut.csv")
+write.csv(povRatesOut, "povRatesOut.csv", row.names = FALSE)
 
 #############################################
 # DATA FOR POV RATE IN COMPARISON TO HUNGARY#

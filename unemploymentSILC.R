@@ -1,9 +1,10 @@
-# LOAD STUFF
+# LOAD LIBRARIES
 library(data.table) # for import function fread
 library(ggplot2)
-library(directlabels)
+library(directlabels) # use in conjunction with ggplot2
 library(gridExtra) # for combinePlot function
 
+# Set directory to SILC Cross-sectional
 setwd("/Users/SupremeLeader/Documents/Central European University/Applied Policy Project/Cross-sectional Data")
 ################################################
 
@@ -16,12 +17,12 @@ setwd("/Users/SupremeLeader/Documents/Central European University/Applied Policy
 ## IMPORT DATA ##
 #################
 # Make sure to flatten directory with all files in the format "UDB_c[year][type].csv"
+# This can be done using bash/command line
+
 # Have not included conditions, works best when used with at least one variable
 # from each of D, H, and P file.
 # IDs of both households and persons are ALWAYS included.
 # Need to verify accuracy of merging.
-# Sample code: test <- importData(countries = c("AT", "HU"), 2007, 
-# vars = c("DB090", "HX090", "PY090G", "PY200G"))
 
 importData <- function(countries, year, vars){
   
@@ -53,6 +54,10 @@ importData <- function(countries, year, vars){
                                      by.x = c("DB020", "DB030"),
                                      by.y = c("PB020", "DB030"))
 } # end function importData
+
+# EXAMPLE 
+test <- importData(countries = c("AT", "HU"), 2007, 
+                   vars = c("DB090", "HX090", "PY090G", "PY200G"))
 
 
 #----------------------------------------------#
@@ -176,229 +181,85 @@ pov1 <- function(country, year, thresholds = 60)
 }  ##  end function pov1
 
 
-
-#----------------------------------------------#
-# TEST STUFF
-# Pov rate plot for countries 
-hu1 <- pov1("HU", 2014, seq(30, 80, 1))
-lv1 <- pov1("LV", 2014, seq(30, 80, 1))
-cz1 <- pov1("CZ", 2014, seq(30, 80, 1))
-b <- rbind(hu1, lv1, cz1)
-plot2 <- ggplot(data = b, aes(threshold, personRate, 
-                          colour = country)) + 
-       geom_line() + geom_vline(xintercept = 60) + theme_classic() +
-       ggtitle("Poverty Rates for Different Thresholds, Person 2014")
-
-hu <- pov1("HU", 2012, seq(30, 80, 1))
-lv <- pov1("LV", 2012, seq(30, 80, 1))
-cz <- pov1("CZ", 2012, seq(30, 80, 1))
-a <- rbind(hu, lv, cz)
-
-
-
-
-plot1 <- ggplot(data = a, aes(threshold, personRate, 
-                          colour = country)) + 
-       geom_line() + geom_vline(xintercept = 60) + theme_classic() +
-       ggtitle("Poverty Rates for Different Thresholds, Person 2012")
-
-plot3 <- ggplot(data = a, aes(threshold, householdRate, 
-                                   colour = country)) + 
-                geom_line() + geom_vline(xintercept = 60) + theme_classic() +
-                ggtitle("Poverty Rates for Different Thresholds, Household 2012")
-
-plot4 <- ggplot(data = b, aes(threshold, householdRate, 
-                                   colour = country)) + 
-                geom_line() + geom_vline(xintercept = 60) + theme_classic() +
-                ggtitle("Poverty Rates for Different Thresholds, Household 2014")
-
-# Put in grid 
-library(gridExtra)
-myPlotList = list(plot1, plot2, plot3, plot4)
-do.call(grid.arrange,  myPlotList)
-grid.arrange(plot1, plot2, plot3, plot4)
-
-# tested some shit here I don't know what
-a$year <- "2012"
-b$year <- "2014"
-c <- rbind(a[which(a$country == "CZ"),], b[which(a$country == "CZ"),])
-plot(ggplot(data =c, aes(threshold, personRate, colour = year)) +
-       geom_line())
-
-
-
-beta <- melt(hu1[, -c(1)], measure.vars = c("personRate", "personRateNoBen", "householdRate", "householdRateNoBen"))
-head(beta)
-plot(ggplot(data = beta, aes(threshold, value, colour = variable)) +
-       geom_line() + theme_classic())
-beta
-hu1
-write.csv(hu1, "hu.csv")
-
-
-
 #-----------------------------------------------------------------------------------
-# Generate massive dataset for pov rates for all countries all years
+#######################################################################
+# GENERATE MASSIVE DATASET FOR POV RATES FOR ALL 4 COUNTRIES ALL YEARS#
+#######################################################################
+
+# Create lists of countries and years for for loop 
 listCountry <- c("HU", "LV", "CZ", "SK")
 listYear <- c(2005:2014)
 
-endMyLifeFam <- data.frame(country = character(), year = integer(), 
+# Create empty dataframe as placeholder for for loop output
+povRatesOut <- data.frame(country = character(), year = integer(), 
                           threshold = integer(), 
                           personRate = double(), householdRate = double(),
                           personRateNoBen = double(), householdRateNoBen = double())
+
+# For loop calculating poverty rate for each country each year
 for (country in listCountry){
   for (year in listYear){
-    endMyLifeFam <- rbind(endMyLifeFam, pov1(country, year, seq(30, 80, 1)))
+    povRatesOut <- rbind(povRatesOut, pov1(country, year, seq(30, 80, 1)))
   }
 }
 
-write.csv(endMyLifeFam, "massiveData.csv")
+# Save to csv
+write.csv(povRatesOut, "povRatesOut.csv")
 
-# Data for pov rate in comparison to HUNGARY
-fuckMe <- data.frame(country = character(), year = integer(), 
+#############################################
+# DATA FOR POV RATE IN COMPARISON TO HUNGARY#
+#############################################
+# Create a dataframe of base poverty rates (Hungarian rates). Output is the
+# difference between povRatesOut and base
+
+# Create empty dataframe, identical to previous dataframe for povRatesOut
+baseRates <- data.frame(country = character(), year = integer(), 
                      threshold = integer(), 
                      personRate = double(), householdRate = double(),
                      personRateNoBen = double(), householdRateNoBen = double())
 
-fuckMe <- endMyLifeFam[which(endMyLifeFam$country == "HU"),]
-fuckMe <- rbind(fuckMe, fuckMe, fuckMe, fuckMe)
+# Fill dataframe with data from povRatesOut, filtered to include only Hungary
+baseRates <- povRatesOut[which(povRatesOut$country == "HU"),]
 
-diff <- endMyLifeFam[, 4:7] - fuckMe[, 4:7]
-diff <- cbind(endMyLifeFam[, 1:3], diff)
-write.csv(diff, "diffPovRates.csv", row.names = FALSE)
+# Row bind 4 times to match the 4 countries in povRatesOut 
+baseRates <- rbind(baseRates, baseRates, baseRates, baseRates)
 
-json <- toJSON(diff)
-write(json, "deathEmbrace.json")
+# Get poverty rates in comparison to Hungary by subtracting base from povRatesOut
+diffPovRatesOut <- povRatesOut[, 4:7] - baseRates[, 4:7]
+diffPovRatesOut <- cbind(povRatesOut[, 1:3], diffPovRatesOut)
+write.csv(diffPovRatesOut, "diffPovRatesOut.csv", row.names = FALSE)
 
 #------------------------------------------------------------------------------------
 
-
-
-
-# graph for difference between pov rate before and after benefits 
-
-
-omega <- melt(lv1[, -c(1)], measure.vars = c("personRate", "personRateNoBen", "householdRate", "householdRateNoBen"))
-head(beta)
-plot(ggplot(data = omega, aes(threshold, value, colour = variable)) +
-       geom_line() + theme_classic())
-
-lv1_1 <- lv1[, c("country" ,"threshold", "householdRate", "householdRateNoBen")]
-lv1_1$difference <- abs(lv1_1$householdRate - lv1_1$householdRateNoBen)
-lv1_1 <- melt(lv1_1, measure.vars = c("householdRate", "householdRateNoBen"))
-plot(ggplot(data = lv1_1, aes(threshold, difference)) +
-       geom_line() + theme_classic())
-
-
-hu1_1 <- hu1[, c("country" ,"threshold", "householdRate", "householdRateNoBen")]
-hu1_1$difference <- abs(hu1_1$householdRate - hu1_1$householdRateNoBen)
-hu1_1 <- melt(hu1_1, measure.vars = c("householdRate", "householdRateNoBen"))
-plot(ggplot(data = hu1_1, aes(threshold, difference)) +
-       geom_line() + theme_classic())
-
-
-cz1_1 <- cz1[, c("country" , "threshold", "householdRate", "householdRateNoBen")]
-cz1_1$difference <- abs(cz1_1$householdRate - cz1_1$householdRateNoBen)
-cz1_1 <- melt(cz1_1, measure.vars = c("householdRate", "householdRateNoBen"))
-plot(ggplot(data = cz1_1, aes(threshold, difference)) +
-       geom_line() + theme_classic())
-
-#################################################################################
-# Prepare data for D3
-# eternalVoid = data, totalDespair = difference to Hungary
-HU <- data.frame(country = character(), year = integer(), 
-                 threshold = integer(), 
-                 personRate = double(), householdRate = double(),
-                 personRateNoBen = double(), householdRateNoBen = double())
-for (year in listYear){
-  HU <- rbind(HU, pov1("HU", year, seq(30, 80, 1)))
-}
-names(HU) <- c("country", "year", "threshold", "personHU", "householdHU",
-               "personNoBenHU", "householdNoBenHU")
-  
-LV <- data.frame(country = character(), year = integer(), 
-                 threshold = integer(), 
-                 personRate = double(), householdRate = double(),
-                 personRateNoBen = double(), householdRateNoBen = double())
-
-for (year in listYear){
-  LV <- rbind(LV, pov1("LV", year, seq(30, 80, 1)))
-}  
-names(LV) <- c("country", "year", "threshold", "personLV", "householdLV",
-               "personNoBenLV", "householdNoBenLV")
-
-CZ <- data.frame(country = character(), year = integer(), 
-                 threshold = integer(), 
-                 personRate = double(), householdRate = double(),
-                 personRateNoBen = double(), householdRateNoBen = double())
-for (year in listYear){
-  CZ <- rbind(CZ, pov1("CZ", year, seq(30, 80, 1)))
-}
-names(CZ) <- c("country", "year", "threshold", "personCZ", "householdCZ",
-               "personNoBenCZ", "householdNoBenCZ")
-
-SK <- data.frame(country = character(), year = integer(), 
-                 threshold = integer(), 
-                 personRate = double(), householdRate = double(),
-                 personRateNoBen = double(), householdRateNoBen = double())
-for (year in listYear){
-  SK <- rbind(SK, pov1("SK", year, seq(30, 80, 1)))
-}
-names(SK) <- c("country", "year", "threshold", "personSK", "householdSK",
-               "personNoBenSK", "householdNoBenSK")
-
-
-eternalVoid <- cbind(HU[, -c(1)], LV[, -c(1,2,3)], CZ[, -c(1,2,3)], SK[, -c(1,2,3)])
-write.csv(eternalVoid, "eternalVoid.csv")
-
-totalDespair <- eternalVoid
-totalDespair$personLV <- totalDespair$personLV - totalDespair$personHU
-totalDespair$personCZ <- totalDespair$personCZ - totalDespair$personHU
-totalDespair$personSK <- totalDespair$personSK - totalDespair$personHU
-totalDespair$householdLV <- totalDespair$householdLV - totalDespair$householdHU
-totalDespair$householdCZ <- totalDespair$householdCZ - totalDespair$householdHU
-totalDespair$householdSK <- totalDespair$householdSK - totalDespair$householdHU
-totalDespair$personNoBenLV <- totalDespair$personNoBenLV - totalDespair$personNoBenHU
-totalDespair$personNoBenCZ <- totalDespair$personNoBenCZ - totalDespair$personNoBenHU
-totalDespair$personNoBenSK <- totalDespair$personNoBenSK - totalDespair$personNoBenHU
-totalDespair$householdNoBenLV <- totalDespair$householdNoBenLV - totalDespair$householdNoBenHU
-totalDespair$householdNoBenCZ <- totalDespair$householdNoBenCZ - totalDespair$householdNoBenHU
-totalDespair$householdNoBenSK <- totalDespair$householdNoBenSK - totalDespair$householdNoBenHU
-totalDespair$personHU <- 0
-totalDespair$householdHU <- 0
-totalDespair$personNoBenHU <- 0
-totalDespair$householdNoBenHU <- 0
-
-write.csv(totalDespair, "d3data.csv")
-
-############################################################################
-# Plot some shit. Difference in poverty compare to HUNGARY
-
-plot(ggplot(diff[which(diff$year == 2014),],
-            aes(threshold, personRate, colour = country)) + geom_line() +
-       theme_classic() + scale_y_continuous(limits = c(-15, 15)) +
-       geom_vline(xintercept = 60))
-
-
-#----------------------------------------------------------
 
 ####################
 ## PLOT FUNCTIONS ##
 ####################
 # Load data
-massiveData <- read.csv("massiveData.csv")
-diff <- read.csv("diffPovRates.csv")
+povRatesOut <- read.csv("povRatesOut.csv")
+diffPovRatesOut <- read.csv("diffPovRatesOut.csv")
 
-# Color-blind- friendly pallette
-# add this to ggplot: scale_colour_manual(values=cbPalette)
+# Create a color-blind-friendly pallette
+# add this to ggplot: scale_colour_manual(values = cbPalette)
 cbPalette <- c("#999999", "#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2", "#D55E00", "#CC79A7")
 
-# Plot compare rates among countries
+# USAGE: FUNCTIONS GENERALLY TAKE ARGUMENTS YEAR, RATE, COUNTRY, TITLE, OF WHICH:
+# YEAR: in numeric
+# RATE: in string, either "personRate" or "householdRate"
+# COUNTRY: in string, abbreviation
+# TITLE: in string, whatever the graph's name should be
+
+######################################
+# Plot compare rates among countries #
+######################################
+# Not used
+
 plotCompare <- function(year, rate, title){
-  ggplot(data = massiveData[which(massiveData$year == year),], 
+  ggplot(data = povRatesOut[which(povRatesOut$year == year),], 
          aes_string("threshold", rate, colour = "country")) + geom_line() +
     geom_vline(xintercept = 60, linetype = "dotted") + theme_classic() +
-    ggtitle(title) + theme(legend.position = "none") + scale_colour_manual(values=cbPalette) +
+    ggtitle(title) + theme(legend.position = "none") + 
+    scale_colour_manual(values = cbPalette) +
     scale_y_continuous(limits = c(0, 42)) +
     theme(plot.title = element_text(family = "Trebuchet MS", size = 22, 
                                     color="#666666", face="bold")) +
@@ -407,49 +268,112 @@ plotCompare <- function(year, rate, title){
 
 } # end of function plotCompare
 
-# Plot rates of countries using HU as base 
+# EXAMPLE
+plotCompare(2014, "householdRate", "Poverty Rates for Households in 2014")
+
+############################################
+# Plot rates of countries using HU as base #
+############################################
+
 plotDiff <- function(year, rate, title){
-  ggplot(data = diff[which(diff$year == year),], 
+  ggplot(data = diffPovRatesOut[which(diffPovRatesOut$year == year),], 
          aes_string("threshold", rate, colour = "country")) + geom_line() +
     geom_vline(xintercept = 60, linetype = "dotted") + theme_classic() +
     ggtitle(title) + theme(legend.position = "none", 
                            plot.title = element_text(family = "Trebuchet MS", size = 22,
                                                      color="#666666", face="bold")) + 
-    scale_colour_manual(values=cbPalette) +
+    scale_colour_manual(values = cbPalette) +
     scale_y_continuous(name = "poverty rate (%)", limits = c(-8, 18)) +
     geom_dl(aes(label = country), method = list(dl.combine("first.points", "last.points"), 
                                                 cex = 0.8))
 } # end of function plotDiff
 
-# Plot difference of curves within a country
+# EXAMPLE
+plotDiff(2014, "householdRate", "Poverty Rates for Household in 2014 \nin Comparison to Hungary")
+
+##############################################
+# Plot difference of curves within a country #
+##############################################
+# Not used. Hard to differentiate lines, not recommended. Use the next function instead
 plotCountry <- function(country, year, title){
-  temp <- melt(massiveData[which(massiveData$year == year & massiveData$country == country), c(-1)],
+  temp <- melt(povRatesOut[which(povRatesOut$year == year & povRatesOut$country == country), c(-1)],
                measure.vars = c("personRate", "personRateNoBen", "householdRate",
                                 "householdRateNoBen"))
   ggplot(data = temp, aes(threshold, value, colour = variable)) + geom_line() + 
-    geom_vline(xintercept = 60, linetype = "dotted") + theme_classic() +
-    ggtitle(title) + theme(legend.position = c(0.2, 0.8), legend.title = element_blank(),
+    geom_vline(xintercept = 60, linetype = "dotted") + theme_classic() + ggtitle(title) + 
+    theme(legend.position = c(0.2, 0.8), legend.title = element_blank(),
                            plot.title = element_text(family = "Trebuchet MS", size = 22,
                                                      color="#666666", face="bold")) +
-    scale_colour_manual(values=cbPalette) + scale_y_continuous(name = "poverty rate (%)", limits = c(0, 42))
+    scale_colour_manual(values = cbPalette) + 
+    scale_y_continuous(name = "poverty rate (%)", limits = c(0, 42))
 } # end of function plotCountry
 
-# Combine Plots
+# EXAMPLE
+plot(plotCountry("HU", 2011, "Hungary, 2011"))
+
+
+##############################
+# Recommended by Alexis Diamond
+# Plot difference between ben and no ben in a country for 2 years on same graph
+# Good for comparing effects of benefits on poverty rates over time
+diffBenNoBen <- function(country, rate, year1, year2){
+  povRatesOut$diffPerson <- povRatesOut$personRateNoBen - povRatesOut$personRate
+  povRatesOut$diffHouse <- povRatesOut$householdRateNoBen - povRatesOut$householdRate
+  compare <- povRatesOut[which(povRatesOut$country == country),]
+  compare <- compare[which(compare$year == year1 | compare$year == year2),]
+  compare$year <- as.factor(compare$year)
+  if(rate == "personRate"){
+    ggplot(data = compare, aes_string("threshold", "diffPerson", colour = "year")) + 
+      geom_line() + theme_classic() + 
+      geom_vline(xintercept = 60, linetype = "dotted") +
+      ggtitle(paste(country, ", ", year1, " & ", year2, sep = "")) +
+      theme(legend.position = "none") +
+      scale_colour_manual(values = cbPalette) + 
+      theme(plot.title = element_text(family = "Trebuchet MS", size = 22, 
+                                      color = "#666666", face = "bold")) + labs(y = "change (% point)") + 
+      geom_dl(aes(label = year), method = list(dl.combine("first.points", "last.points"),
+                                               cex = 0.8))  
+  }
+  else{
+    ggplot(data = compare, aes_string("threshold", "diffHouse", colour = "year")) + 
+      geom_line() + theme_classic() + 
+      geom_vline(xintercept = 60, linetype = "dotted") +
+      ggtitle(paste(country, ", ", year1, " & ", year2, sep = "")) + 
+      theme(legend.position = "none") +
+      scale_colour_manual(values = cbPalette) + 
+      theme(plot.title = element_text(family = "Trebuchet MS", size = 22, 
+                                      color = "#666666", face = "bold")) + labs(y = "change (% point)") + 
+      geom_dl(aes(label = year), method = list(dl.combine("first.points", "last.points"),
+                                               cex = 0.8))
+  }
+  
+} # end of function diffBenNoBen
+
+# EXAMPLE
+diffBenNoBen("HU", "householdRate", 2011, 2014)
+
+#################
+# Combine Plots #
+#################
+
 combinePlot <- function(plot1, plot2){
   temp = list(plot1, plot2)
   do.call(grid.arrange, temp)
   grid.arrange(plot1, plot2, ncol = 2, nrow = 1)
 } # end of function combinePlot
 
+#--------------------------------------------------------------------
+
 ##################
-# Plot poverty rates in relation in Hungary 2010 and 2014
-test <- plotDiff(2011, "householdRate", "2011")
-test1 <- plotDiff(2014, "householdRate", "2014")
-combinePlot(test, test1)
-# Plot poverty rates in relation to Hungary in 2010 and 2014, no ben
-random <- plotDiff(2011, "householdRateNoBen", "2011")
-random1 <- plotDiff(2014, "householdRateNoBen", "2014")
-combinePlot(random, random1)
+# Plot poverty rates in relation in Hungary 2011 and 2014
+hu11 <- plotDiff(2011, "householdRate", "2011")
+hu14 <- plotDiff(2014, "householdRate", "2014")
+combinePlot(hu11, hu14)
+
+# Plot poverty rates in relation to Hungary in 2011 and 2014, no ben
+hu11NoBen <- plotDiff(2011, "householdRateNoBen", "2011")
+hu14NoBen <- plotDiff(2014, "householdRateNoBen", "2014")
+combinePlot(hu11NoBen, hu14NoBen)
 
 # Plot country rates for Hungary
 hu06 <- plotCountry("HU", 2006, "HU 2006")
@@ -457,53 +381,23 @@ hu11 <- plotCountry("HU", 2011, "HU 2011")
 hu13 <- plotCountry("HU", 2013, "HU 2013")
 hu14 <- plotCountry("HU", 2014, "HU 2014")
 combinePlot(hu11, hu14)
+# This should be replaced by
+diffBenNoBen("HU", "householdRate", 2011, 2014)
+
 # for Latvia 2010 and 2014
 lv10 <- plotCountry("LV", 2011, "LV 2011")
 lv14 <- plotCountry("LV", 2014, "LV 2014")
 combinePlot(lv10, lv14)
 
-lv10all <- importData(countries = "LV", year = 2010, 
-                      vars = c("DB090", "HX090", "PY090G", "HX050", "HY020"))
-lv14all <- importData(countries = "LV", year = 2014, 
-                      vars = c("DB090", "HX090", "PY090G", "HX050", "HY020"))
-lv07all <- importData(countries = "LV", year = 2008, 
-                      vars = c("DB090", "HX090", "PY090G", "HX050", "HY020"))
-summary(lv10all$PY090G)
-summary(lv14all$PY090G)
-summary(lv07all$py090G)
+#------------------------------------------------------
 
+###################################################
+# Graph for Armine's data                         #  
+# Include graphs for public expenditures on ALMPs #
+###################################################
+setwd("/Users/SupremeLeader/Documents/Central European University/Applied Policy Project/codes/unemploymentSILC")
 
-test <- importData("HU", 2015, vars = c("DB090", "HX090", "PY090G", "HX050", "HY020"))
-summary(test$HX090)
-
-
-
-setwd("/Users/SupremeLeader/Documents/Central European University/Applied Policy Project/Cross-sectional Data")
-euromod <- read.table("HU_2012_a5.txt")
-hudata12 <- importData("HU", 2012, vars = c("DB090", "HX090", "PY090G", "HX050", "HY020"))
-(setdiff(sort(unique(euromod$idhh)), sort(unique(hudata12$DB030))))
-(setdiff(sort(unique(hudata12$DB030)), sort(unique(euromod$idhh))))
-
-endMyLifeFam <- endMyLifeFam[-which(endMyLifeFam$year == 2006),]
-endMyLifeFam <- read.csv("endMyLifeFam.csv")
-endMyLifeFam <- endMyLifeFam[, -c(1)]
-abc <- melt(endMyLifeFam, id.vars = c("country", "year", "threshold"))
-abc$variable <- paste(abc$variable, abc$country, sep = "")
-write.csv(abc, "final.csv")
-
-setwd("/Users/SupremeLeader/Documents/Coding Stuff/test")
-endMyLifeFam <- read.csv("endMyLifeFam.csv")
-endMyLifeFam <- endMyLifeFam[, -c(1)]
-write.csv(endMyLifeFam, "endMyLIfeFam.csv", row.names = FALSE)
-
-
-
-
-
-
-
-###################
-# Graph for Armine's data
+# Graph for expenditure on training vs job creation
 graphStuff <- read.csv("Data-for-graphs.csv")
 graphStuff$Country <- gsub("Hungary", "HU", graphStuff$Country)
 graphStuff$Country <- gsub("Czech Reuplic", "CZ", graphStuff$Country)
@@ -529,7 +423,7 @@ plot1<- ggplot(data = graph1,
 plot2<- ggplot(data = graph1, 
                aes(Year, PW_Perc_GDP, colour = Country)) + geom_line() +
   theme_classic() +
-  ggtitle("Public Expenditure on \n Direct Job Creation") + theme(legend.position = "none") + scale_colour_manual(values=cbPalette) +
+  ggtitle("Public Expenditure on \nDirect Job Creation") + theme(legend.position = "none") + scale_colour_manual(values=cbPalette) +
   theme(plot.title = element_text(family = "Trebuchet MS", size = 22, 
                                   color="#666666", face="bold")) +
   labs(y = "Expenditure (% of GDP)") +
@@ -537,6 +431,7 @@ plot2<- ggplot(data = graph1,
                                               cex = 0.8))
 combinePlot(plot2, plot1)
 
+# Graph for unemployment rates in Hungary with and without public work
 graph2 <- graphStuff[which(graphStuff$Country == "HU"), c(2, 5, 6)]
 graph2 <- graph2[-(1:4),]
 graph2 <- melt(graph2, id.vars = c("Year"))
@@ -553,6 +448,7 @@ plot(ggplot(data = graph2,
              legend.text = element_text(size = 13)) +
        labs(y = "Rate (%)"))
 
+# Graph for expenditure in Hungary vs EU
 graph3 <- graphStuff[which(graphStuff$Country == "HU" | graphStuff$Country == "EU"), c(1,2, 7:11)]
 graph3 <- graph3[-which(graph3$Year == 2016),]
 
@@ -587,25 +483,4 @@ plot4 <- ggplot(data = graph3EU,
 combinePlot(plot3, plot4)
 
 
-##############################
-# Fix according to Alexis
-# Plot difference between ben and no ben for 2 years on same graph
-massiveData$diffPerson <- massiveData$personRateNoBen - massiveData$personRate
-massiveData$diffHouse <-massiveData$householdRateNoBen - massiveData$householdRate
-totona <- massiveData[which(massiveData$country == "HU"), c(2, 3, 4, 10)]
-totona <- totona[which(totona$year == 2014 | totona$year == 2011), -c(1)]
-totona$year <- as.factor(totona$year)
-totona = melt(totona, id.vars = c("threshold", "year"))
-
-plot(ggplot(data = totona, 
-       aes(threshold, diffHouse, colour = year)) + geom_line() +
-  theme_classic() + geom_vline(xintercept = 60, linetype = "dotted") +
-  ggtitle("Hungary, 2011 & 2014") + theme(legend.position = "none") + scale_colour_manual(values=cbPalette) +
-  theme(plot.title = element_text(family = "Trebuchet MS", size = 22, 
-                                  color="#666666", face="bold")) +
-  labs(y = "change (% point)") +
-  geom_dl(aes(label = year), method = list(dl.combine("first.points", "last.points"), 
-                                              cex = 0.8)))
-
-plot(plotCountry("HU", 2011, "Hungary, 2011"))
 
